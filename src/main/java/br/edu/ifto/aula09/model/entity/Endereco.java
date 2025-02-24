@@ -22,7 +22,6 @@ public class Endereco {
     @NotBlank
     private String logradouro;
 
-    @NotBlank
     private String complemento;
 
     @NotBlank

@@ -40,7 +40,8 @@ public class SecurityConfiguration {
                         .anyRequest().authenticated()
                 )
                 .formLogin(login -> login
-                        .loginProcessingUrl("/login")  // Define o endpoint de processamento do login
+//                        .loginPage("/login")
+                        .loginProcessingUrl("/login")
                         .defaultSuccessUrl("/produto/catalogo", true)
                         .successHandler(savedRequestAwareAuthenticationSuccessHandler())
                         .failureUrl("/login?error=true")

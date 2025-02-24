@@ -4,6 +4,7 @@ import br.edu.ifto.aula09.model.entity.*;
 import br.edu.ifto.aula09.model.repository.*;
 import jakarta.servlet.http.HttpSession;
 import jakarta.transaction.Transactional;
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,12 +15,12 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.ui.ModelMap;
+import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.ModelAndView;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -156,7 +157,7 @@ public class VendaController {
 
         model.addAttribute("venda", venda);
 
-        model.addAttribute("endereco", new Endereco());
+        model.addAttribute("enderecoEntrega", new Endereco());
 
         return "venda/checkout";
     }
@@ -182,55 +183,40 @@ public class VendaController {
     }
 
     @PostMapping("/finalizar")
-    public String finalizarVenda(@RequestParam Map<String, String> formData, HttpSession session, Model model) {
-        try {
-            Venda venda = (Venda) session.getAttribute("venda");
+    public String finalizarVenda(@Valid @ModelAttribute("enderecoEntrega") Endereco enderecoEntrega,
+                                 BindingResult result,  HttpSession session, Model model) {
 
-            if (venda == null || venda.getItensVenda().isEmpty()) {
-                logger.warn("Tentativa de finalizar venda com carrinho vazio ou nulo.");
-                return "redirect:/venda/carrinho";
-            }
+        Venda venda = (Venda) session.getAttribute("venda");
 
-            Pessoa pessoa = obterPessoaLogada();
-
-            Endereco enderecoEntrega;
-            if (formData.containsKey("cep")) {
-                enderecoEntrega = new Endereco();
-                enderecoEntrega.setCep(formData.get("cep"));
-                enderecoEntrega.setLogradouro(formData.get("logradouro"));
-                enderecoEntrega.setNumero(formData.get("numero"));
-                enderecoEntrega.setBairro(formData.get("bairro"));
-                enderecoEntrega.setCidade(formData.get("cidade"));
-                enderecoEntrega.setEstado(formData.get("estado"));
-                enderecoEntrega.setPessoas(List.of(pessoa));
-                enderecoRepository.save(enderecoEntrega);
-            } else {
-                // analisar se isso aqui é útil
-                enderecoEntrega = pessoa.getEnderecos().isEmpty() ? null : pessoa.getEnderecos().get(0);
-            }
-
-            if (enderecoEntrega == null) {
-                model.addAttribute("errorMessage", "Por favor, informe um endereço de entrega.");
-                return "redirect:/venda/carrinho";
-            }
-
-            venda.setPessoa(pessoa);
-            venda.setEnderecoEntrega(enderecoEntrega);
-            venda.setDataVenda(LocalDateTime.now());
-
-            vendaRepository.save(venda);
-
-            session.removeAttribute("enderecoEntrega");
-            session.removeAttribute("venda");
-
-            logger.info("Venda finalizada com sucesso. VendaId: {}", venda.getId());
-            model.addAttribute("successMessage", "Venda finalizada com sucesso!");
-            return "redirect:/venda/minhas-vendas";
-        } catch (Exception e) {
-            logger.error("Ocorreu um erro ao finalizar a venda.", e);
-            model.addAttribute("errorMessage", "Ocorreu um erro ao finalizar a venda. Por favor, tente novamente.");
+        if (venda == null || venda.getItensVenda().isEmpty()) {
+            model.addAttribute("errorMessage", "Carrinho vazio!");
             return "redirect:/venda/carrinho";
         }
+
+
+
+        if (result.hasErrors()) {
+            Pessoa pessoa = obterPessoaLogada();
+            List<Endereco> enderecos = enderecoRepository.findByPessoas_Id(pessoa.getId());
+            model.addAttribute("enderecos", enderecos);
+            model.addAttribute("venda", venda);
+            return "venda/checkout";
+        }
+
+        Pessoa pessoa = obterPessoaLogada();
+        enderecoEntrega.setPessoas(List.of(pessoa));
+        enderecoRepository.save(enderecoEntrega);
+
+        venda.setPessoa(pessoa);
+        venda.setEnderecoEntrega(enderecoEntrega);
+        venda.setDataVenda(LocalDateTime.now());
+        vendaRepository.save(venda);
+
+        session.removeAttribute("enderecoEntrega");
+        session.removeAttribute("venda");
+        logger.info("Venda finalizada com sucesso. VendaId: {}", venda.getId());
+        model.addAttribute("successMessage", "Venda finalizada com sucesso!");
+        return "redirect:/venda/minhas-vendas";
     }
 
     @GetMapping("/list")
